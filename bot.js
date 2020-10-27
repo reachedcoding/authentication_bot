@@ -6,9 +6,12 @@ const readline = require('readline');
 const { google } = require('googleapis');
 const crypto = require("crypto");
 const util = require('util')
+var express = require('express');
 
-let token, spreadsheet_ID, time_added, prefix, guild_ID, admins;
+let token, spreadsheet_ID, time_added, prefix, guild_ID, admins, port;
 let num_roles;
+let app = express();
+let queue = [];
 
 fs.readFile('settings.json', (err, content) => {
   if (err) return console.log('Error loading settings:', err);
@@ -19,6 +22,12 @@ fs.readFile('settings.json', (err, content) => {
   time_added = settings.time_added;
   prefix = settings.prefix;
   guild_ID = settings.guild_ID;
+  port = settings.port;
+  
+  app.listen(port);
+  var msg = 'Listening at http://localhost:' + port;
+  timeLog(msg.green.bold);
+
   client.login(token);
 });
 
@@ -155,7 +164,6 @@ function addRoles(author, role_id) {
   }
 }
 
-var express = require('express');
 var querystring = require('querystring');
 var request = require('request');
 var colors = require('colors');
@@ -174,7 +182,6 @@ colors.setTheme({
   error: 'red'
 });
 
-var app = express();
 app.use(bodyParser.urlencoded());
 
 app.get('/', function (req, res) {
@@ -267,38 +274,10 @@ app.post('/', function (req, res) {
         // } else {
         //   timeLog(`A payment was made by ${req.body['payer_email']}, but the subscription ID, ${req.body['item_number']}, did not match the requirements`.red);
         // } 
+        let item_name = req.body['product_name'];
         let business = req.body['business'];
-        console.log(business);
-        switch (business) {
-          case 'info@copgang.it':
-            getValues(auth, req.body['payer_email'], 'academy', 'info@copgang.it');
-            break;
-          case 'academy@copgang.it':
-            getValues(auth, req.body['payer_email'], 'academy', 'academy@copgang.it');
-            break;
-          case 'info@copgang.eu':
-            getValues(auth, req.body['payer_email'], 'academy', 'info@copgang.eu');
-            break;
-          case 'france@copgang.eu':
-            getValues(auth, req.body['payer_email'], 'france', 'france@copgang.eu');
-            break;
-          case 'netherlands@copgang.eu':
-            getValues(auth, req.body['payer_email'], 'netherlands', 'netherlands@copgang.eu');
-            break;
-          case 'hungary@copgang.eu':
-            getValues(auth, req.body['payer_email'], 'hungary', 'hungary@copgang.eu');
-            break;
-          case 'germany@copgang.eu':
-            getValues(auth, req.body['payer_email'], 'germany', 'germany@copgang.eu');
-            break;
-          case 'ssinghnes@gmail.com':
-            getValues(auth, req.body['payer_email'], 'main');
-            break;
-          default:
-            getValues(auth, req.body['payer_email'], 'main');
-            break;
-        }
-      }
+        //console.log(business);
+        getValues(auth, req.body['payer_email'], item_name);
       // } else if (body.substring(0, 7) === 'INVALID') {
       //   timeLog('Fail: ' + util.inspect(body, { showHidden: false, depth: null }));
       //   // IPN invalid, log for manual investigation
@@ -306,10 +285,16 @@ app.post('/', function (req, res) {
       //   //console.log('\n\n');
       // }
     }
+  }
   });
 });
 
-function email_paid(payer_email, values, role) {
+async function email_paid(payer_email, values, item_name) {
+  
+  let data = await findRoleDataFromPlan(item_name);
+  let type = data[0];
+  let lifetime = data[1];
+
   payer_email = payer_email.toLowerCase();
   //client.channels.get(discord_Channel_ID).send(values);
   var d = new Date();
@@ -317,23 +302,19 @@ function email_paid(payer_email, values, role) {
   var year = d.getFullYear();
   var days = numDays(month, year);
   var hours = days * 24;
+  
   var contained = false;
   for (var i = 0; i < values.length; i++) {
     if (!values[i][1]) continue;
     if (values[i][1].toLowerCase() == payer_email) {
       contained = true;
-      setValues(auth, [[null, null, parseInt(values[i][2]) + hours, null, null, null, null, new Date()]], i + 1);
+      setValues(auth, [[null, null, parseInt(values[i][2]) + hours, null,    null,    null,   null, new Date()]], i + 1);
     }
   }
   if (!contained) {
-    setValues(auth, [[null, payer_email, null, null, type, null, null, new Date()]], values.length + 1);
+    setValues(auth, [[null,    payer_email, null,                 lifetime, type,    null,   null, new Date()]], values.length + 1);
   }
 }
-
-app.listen(port);
-
-var msg = 'Listening at http://localhost:' + port;
-timeLog(msg.green.bold);
 
 var oAuth2Client;
 let auth;
@@ -383,7 +364,7 @@ function getNewToken(oAuth2Client, callback) {
     });
   });
 }
-function getValues(email, auth, type) {
+function getValues(auth, email, item_name) {
   const sheets = google.sheets({ version: 'v4', auth });
   let range = 'Sheet1';
   let spreadsheetId = spreadsheet_ID;
@@ -392,10 +373,12 @@ function getValues(email, auth, type) {
     range,
   }, (err, result) => {
     if (err) {
+      queue.add([email, item_name]);
+      throw new Error("Problem in receiving sheet data from google");
       // Handle error
       //console.log(err);
     } else {
-      email_paid(email, result.data.values, type);
+      email_paid(email, result.data.values, item_name);
     }
   });
 }
@@ -485,37 +468,46 @@ var hourtick = schedule.scheduleJob('0 * * * *', async function () {
         setValues(auth, values, null);
       }
     });
+
+    for (let i = 0; i < queue.length; i++) {
+      let data = queue.shift();
+      let email = data[0];
+      let item_name = data[1];
+      try {
+        getValues(auth, email, item_name);
+      } catch {
+        queue.add([email, item_name]);
+      }
+    }
   } catch (e) {
 
   }
   //timeLog('Times updated');
 });
 
+async function findRoleDataFromPlan(item_name) {
+  let role_name = 'member';
+  let lifetime = false;
+  try {
+    num_roles = await getNumberedRoles();
+    for (let i = 0; i < num_roles.length; i++) {
+      if (num_roles[i][2].toLowerCase() == item_name.toLowerCase()) {
+        role_name = num_roles[i][0];
+        if (num_roles[i][3].toLowerCase() == "lifetime") {
+          lifetime = true;
+        }
+      }
+    }
+  } catch {
+    
+  }
+  return [role_name, lifetime];
+}
+
 async function findRoleID(role_name) {
   let role_id;
 
   switch (role_name) {
-    case 'academy':
-      role_id = academy_role_ID;
-      break;
-    case 'main':
-      role_id = main_role_ID;
-      break;
-    case 'france':
-      role_id = france;
-      break;
-    case 'netherlands':
-      role_id = netherlands;
-      break;
-    case 'hungary':
-      role_id = hungary;
-      break;
-    case 'germany':
-      role_id = germany;
-      break;
-    case 'youcop':
-      role_id = youcop;
-      break;
     default:
       try {
       num_roles = await getNumberedRoles();

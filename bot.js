@@ -486,8 +486,9 @@ var hourtick = schedule.scheduleJob('0 * * * *', async function () {
 });
 
 async function findRoleDataFromPlan(item_name) {
-  let role_name = 'member';
+  let role_name = 'dabarkads';
   let lifetime = false;
+  console.log("The item name is: " + item_name);
   try {
     num_roles = await getNumberedRoles();
     for (let i = 0; i < num_roles.length; i++) {
@@ -516,10 +517,7 @@ async function findRoleID(role_name) {
           role_id = num_roles[i][1];
         }
       }
-      if (!role_id)
-        role_id = academy_role_ID;
     } catch {
-      role_id = academy_role_ID;
     }
   }
 

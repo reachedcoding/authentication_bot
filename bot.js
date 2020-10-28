@@ -490,7 +490,7 @@ async function findRoleDataFromPlan(item_name) {
   let lifetime = false;
   console.log("The item name is: " + item_name);
   try {
-    num_roles = await getNumberedRoles();
+    //num_roles = await getNumberedRoles();
     for (let i = 0; i < num_roles.length; i++) {
       if (num_roles[i][2].toLowerCase() == item_name.toLowerCase()) {
         role_name = num_roles[i][0];
@@ -511,7 +511,7 @@ async function findRoleID(role_name) {
   switch (role_name) {
     default:
       try {
-      num_roles = await getNumberedRoles();
+      //num_roles = await getNumberedRoles();
       for (let i = 0; i < num_roles.length; i++) {
         if (num_roles[i][0].toLowerCase() == role_name.toLowerCase()) {
           role_id = num_roles[i][1];
@@ -612,6 +612,11 @@ var minutetick = schedule.scheduleJob('* * * * *', async function () {
       }
     });
   } catch (e) { }
+
+  if (new Date().getMinutes() % 10 == 0) {
+    num_roles = getNumberedRoles();
+  }
+
   //timeLog('Times updated');
 });
 

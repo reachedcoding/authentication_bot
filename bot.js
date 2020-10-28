@@ -614,7 +614,7 @@ var minutetick = schedule.scheduleJob('* * * * *', async function () {
   } catch (e) { }
 
   if (new Date().getMinutes() % 10 == 0) {
-    num_roles = getNumberedRoles();
+    getNumberedRoles();
   }
 
   //timeLog('Times updated');

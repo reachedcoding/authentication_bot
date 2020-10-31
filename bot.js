@@ -12,7 +12,7 @@ let token, spreadsheet_ID, time_added, prefix, guild_ID, admins, port;
 let num_roles;
 let app = express();
 let queue = [];
-process.setMaxListeners(1000);
+process.setMaxListeners(0);
 
 fs.readFile('settings.json', (err, content) => {
   if (err) return console.log('Error loading settings:', err);
@@ -146,17 +146,17 @@ function doNothing(e) {
 
 }
 
-function addRoles(author, role_id) {
+async function addRoles(author, role_id) {
   let guild = client.guilds.get(guild_ID);
   if (guild) {
     try {
-      guild.fetchMember(author).then((user) => {
+      await guild.fetchMember(author).then(async (user) => {
         if (user) {
           let role;
           role = guild.roles.find(r => r.id === role_id);
-          user.addRole(role).then((success) => {
+          await user.addRoles([role]).then((success) => {
             timeLog(success.displayName + ' renewed their membership!');
-          }).catch((e) => { });
+          }).catch((e) => { console.log(e) });
         }
       });
     } catch {
@@ -520,6 +520,10 @@ async function findRoleID(role_name) {
       }
     } catch {
     }
+  }
+
+  if (!role_id) {
+    role_id = num_roles[1][1];
   }
 
   return role_id;

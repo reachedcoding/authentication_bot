@@ -12,7 +12,7 @@ let token, spreadsheet_ID, time_added, prefix, guild_ID, admins, port;
 let num_roles;
 let app = express();
 let queue = [];
-process.setMaxListeners(0);
+process.setMaxListeners(1000);
 
 fs.readFile('settings.json', (err, content) => {
   if (err) return console.log('Error loading settings:', err);
